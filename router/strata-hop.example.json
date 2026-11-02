@@ -1,0 +1,37 @@
+{
+  "listen": {
+    "host": "127.0.0.1",
+    "port": 8080
+  },
+  "upstream_port": 8081,
+  "default_model": "qwen3.8-flash-next-iq3_s",
+  "idle_seconds": 1800,
+  "start_timeout": 420,
+  "api_key_env": "STRATA_API_KEY",
+  "aliases": {},
+  "models": {
+    "qwen3.8-flash-next-iq3_xxs": {
+      "label": "IQ3_XXS 32K — 日常用，显存压力小",
+      "profile": "/home/USER/.local/state/strata/launch/iq3_xxs-32k.json",
+      "strata_python": "/home/USER/.local/share/strata/terminal/0.1.46.3/python/bin/python3.12",
+      "server_py": "/home/USER/.local/share/strata/terminal/0.1.46.3/serve/server.py",
+      "engine": "strata",
+      "args": [
+        "--idle-unload",
+        "1800"
+      ]
+    },
+    "qwen3.8-flash-next-iq3_s": {
+      "label": "IQ3_S 32K — 质量更高，占用更大",
+      "profile": "/home/USER/.local/share/strata/install/strata-iq3_s.json",
+      "strata_python": "/home/USER/.local/share/strata/terminal/0.1.46.3/python/bin/python3.12",
+      "server_py": "/home/USER/.local/share/strata/terminal/0.1.46.3/serve/server.py",
+      "engine": "strata",
+      "args": [
+        "--idle-unload",
+        "1800"
+      ]
+    }
+  },
+  "_comment": "idle_seconds: 空闲多久后卸载模型（秒，0=永不）。所有路径均为示例，替换成你的 strata 安装路径；models 的键必须与 dsh provider 配置里的模型 id 一致。"
+}

@@ -1,0 +1,36 @@
+# Bundle patch for dsh-plugin-strata.
+# Enable it by adding this bundle to the profile's `dsh.profile.bundles`
+# (Web sidebar → Plugins), or by deleting `disabled: true` below.
+#
+# Layer 1: the plugin row itself (monitor + hop control tools).
+# Layer 2: the dsh provider entry that routes chats to the hop router.
+# Model ids below MUST match the keys in ~/.config/strata/strata-hop.json,
+# otherwise the hop router cannot resolve the request.
+- insert:
+    - id: dsh-plugin-strata
+      name: 'dsh-plugin-strata'
+      disabled: false
+      config:
+        hopUrl: http://127.0.0.1:8080
+        port: 8756  # 客户端芯片硬编码连接 :8756，勿改
+        host: 127.0.0.1  # 需从局域网设备访问 GUI/芯片时改为 0.0.0.0
+        followJournal: true
+- id: llm-pi-ai
+  config:
+    providers:
+      strata:
+        displayName: 本地 Strata
+        api: openai-completions
+        baseURL: http://127.0.0.1:8080/v1
+        apiKeyEnv: STRATA_API_KEY
+        defaultContextWindow: 131072
+        defaultMaxTokens: 16384
+        models:
+          - id: qwen3.8-flash-next-iq3_s
+            name: 本地 IQ3_S (128K)
+            contextWindow: 131072
+            maxTokens: 16384
+          - id: qwen3.8-flash-next-uncensored-iq3m
+            name: 本地 IQ3_M 无审查 (128K)
+            contextWindow: 131072
+            maxTokens: 16384

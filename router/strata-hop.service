@@ -1,0 +1,23 @@
+[Unit]
+Description=Strata 按需模型路由 (strata-hop: 选模型即启动，空闲自动卸载)
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+# 说明：服务本身常驻但极轻（不加载模型）；模型在第一个请求到达时按 model 字段启动。
+# 注意：把下面所有 /home/USER 占位替换成你的家目录；strata 若装在其他位置，
+# 同时替换 ExecStart 里的 strata-hop.py 与 strata-hop.json 路径。
+ExecStart=/usr/bin/python3 /home/USER/.local/share/strata-hop/strata-hop.py --config /home/USER/.config/strata/strata-hop.json
+Environment=PATH=/home/USER/.local/bin:/usr/local/bin:/usr/bin:/bin
+# STRATA_API_KEY 从用户环境文件读，避免把密钥写进 unit（未配密钥可删除此行）
+EnvironmentFile=-/home/USER/.config/strata/strata-hop.env
+Restart=on-failure
+RestartSec=10
+# 停服务时先让路由层回收它拉起的 strata serve
+KillMode=mixed
+TimeoutStopSec=120
+
+[Install]
+WantedBy=default.target
