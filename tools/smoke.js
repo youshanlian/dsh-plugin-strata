@@ -68,5 +68,15 @@ const noDefaultsResponse = await fetch(`http://127.0.0.1:${port}/settings`, { me
 const noDefaults = await noDefaultsResponse.json().catch(() => ({}))
 console.log('POST /settings without defaults ->', noDefaultsResponse.status === 400 && String(noDefaults.error ?? '').includes('defaults') ? '400 yes' : `NO — BUG (${noDefaultsResponse.status} ${JSON.stringify(noDefaults)})`)
 
+// CORS preflight: the browser sends OPTIONS before the GUI's JSON POSTs; a 404
+// here is what made the panel's save fail with "NetworkError when attempting
+// to fetch resource".
+const optionsResponse = await fetch(`http://127.0.0.1:${port}/settings`, { method: 'OPTIONS' })
+console.log('OPTIONS /settings ->', optionsResponse.status === 204
+  && optionsResponse.headers.get('access-control-allow-origin') === '*'
+  && String(optionsResponse.headers.get('access-control-allow-methods') ?? '').includes('POST')
+  && String(optionsResponse.headers.get('access-control-allow-headers') ?? '').toLowerCase().includes('content-type')
+  ? '204 CORS ok' : `NO — BUG (${optionsResponse.status})`)
+
 await monitor.close()
 console.log('closed; smoke OK')
