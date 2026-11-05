@@ -186,17 +186,21 @@ export function apply (ctx, config) {
   }))
 
   // Tool 1b (功能 4): tune the loaded model's strata run-config (temperature,
-  // top_p, reasoning budget, ...), the agent-side twin of the GUI 调参 panel.
-  // get/set/restart all go through hop's /config — writes land in the model's
-  // run-config file and take effect from the model's next start; restart
+  // top_p, reasoning budget, ...) plus serve's shared "Chat settings"
+  // (POST /settings, the defaults every client inherits for parameters it does
+  // not send itself), the agent-side twin of the GUI 调参 panel.
+  // run-config get/set/restart all go through hop's /config — writes land in the
+  // model's run-config file and take effect from the model's next start; restart
   // (unload + warm force) applies them now without spending any prompt tokens.
+  // Chat settings (settings_get/settings_set) apply immediately, persist next
+  // to the model profile, and never need a restart.
   ctx.tools.register(defineTool({
     name: 'strata_params',
     description:
-      "Tune the strata run-config (调参) of the currently loaded model — sampling defaults (temperature / top_p / top_k / min_p), reasoning_budget_tokens, vram_reserve_mib, mtp, idle_unload_s, engine_silence_s, aliases, etc. Actions: get = the current key/value view (read-only); set = save changes as JSON {\"<key>\": value, ...} with null to clear a key back to strata's default; restart = unload then warm the same model so saved values apply now (~25s engine reload, no inference tokens). Saved values are used from the model's NEXT start unless restarted. set works only while a model is loaded; never sends a prompt.",
+      "Tune the strata run-config (调参) of the currently loaded model — sampling defaults (temperature / top_p / top_k / min_p), reasoning_budget_tokens, vram_reserve_mib, mtp, idle_unload_s, engine_silence_s, aliases, etc. Actions: get = the current key/value view (read-only); set = save changes as JSON {\"<key>\": value, ...} with null to clear a key back to strata's default; restart = unload then warm the same model so saved values apply now (~25s engine reload, no inference tokens). Saved values are used from the model's NEXT start unless restarted. set works only while a model is loaded; never sends a prompt. Also covers strata's shared Chat settings (聊天设置): settings_get = read them (read-only); settings_set = save them as JSON {\"<key>\": value|null} — FULL REPLACEMENT: keys you omit are cleared, null/empty clears one; keys are reasoning_effort (none/low/medium/high), temperature, top_p, top_k, seed, max_tokens, reasoning_budget_tokens, experimental_speed_projection; these apply immediately to requests that do not send the parameter (no restart) and persist across restarts; pass set_json as null with settings_set to clear all.",
     parameters: {
-      action: { type: 'string', required: true, enum: ['get', 'set', 'restart'], description: 'what to do' },
-      set_json: { type: 'string', description: 'for set: JSON object of {key: value|null}, e.g. {"sampling.temperature": 0.6, "reasoning_budget_tokens": 4096, "aliases": null}; keys and ranges are validated against strata runconfig (see get for the key list)' },
+      action: { type: 'string', required: true, enum: ['get', 'set', 'restart', 'settings_get', 'settings_set'], description: 'what to do' },
+      set_json: { type: 'string', description: 'for set: JSON object of {key: value|null}, e.g. {"sampling.temperature": 0.6, "reasoning_budget_tokens": 4096, "aliases": null}; keys and ranges are validated against strata runconfig (see get for the key list). For settings_set: JSON object of the shared Chat settings to keep — full replacement, omitted keys are cleared — e.g. {"reasoning_effort": "medium", "temperature": 0.8, "seed": null}; the literal string "null" clears them all' },
       model: { type: 'string', description: 'for restart: model id to restart (default: the loaded model)' },
     },
     output: {
@@ -207,8 +211,16 @@ export function apply (ctx, config) {
       await ready
       const action = input?.action
       if (action === 'get') return monitor.params.get()
+      if (action === 'settings_get') return monitor.params.settings()
       if (action === 'restart') return monitor.params.restart(typeof input.model === 'string' && input.model !== '' ? input.model : undefined)
-      if (action !== 'set') return { ok: false, error: 'action must be get / set / restart' }
+      if (action === 'settings_set') {
+        if (typeof input.set_json !== 'string' || input.set_json.trim() === '') return { ok: false, error: 'settings_set needs set_json: a JSON object like {"reasoning_effort": "medium"} (full replacement), or the string "null" to clear all' }
+        if (input.set_json.trim() === 'null') return monitor.params.setSettings(null)
+        let values
+        try { values = JSON.parse(input.set_json) } catch (error) { return { ok: false, error: `set_json is not valid JSON: ${String(error?.message ?? error)}` } }
+        return monitor.params.setSettings(values)
+      }
+      if (action !== 'set') return { ok: false, error: 'action must be get / set / restart / settings_get / settings_set' }
       if (typeof input.set_json !== 'string' || input.set_json.trim() === '') return { ok: false, error: 'set needs set_json: a JSON object like {"sampling.temperature": 0.6}' }
       let values
       try { values = JSON.parse(input.set_json) } catch (error) { return { ok: false, error: `set_json is not valid JSON: ${String(error?.message ?? error)}` } }

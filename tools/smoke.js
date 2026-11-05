@@ -60,5 +60,13 @@ console.log('POST /params empty rejected:', emptySet.ok === false ? 'yes' : 'NO 
 const junkBody = await fetch(`http://127.0.0.1:${port}/params`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{oops' })
 console.log('POST /params malformed ->', junkBody.status === 400 ? '400 yes' : `NO — BUG (${junkBody.status})`)
 
+// 聊天设置路由：GET 只读（引擎没加载时返回友好错误，不算失败）；
+// POST 只测被 monitor 挡下的缺参请求，不产生写入。
+const settings = await fetch(`http://127.0.0.1:${port}/settings`).then((response) => response.json())
+console.log('http /settings:', settings.ok === true ? `ok shared=${settings.shared} keys=${settings.keys?.length}` : `not writable: ${settings.error}`)
+const noDefaultsResponse = await fetch(`http://127.0.0.1:${port}/settings`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
+const noDefaults = await noDefaultsResponse.json().catch(() => ({}))
+console.log('POST /settings without defaults ->', noDefaultsResponse.status === 400 && String(noDefaults.error ?? '').includes('defaults') ? '400 yes' : `NO — BUG (${noDefaultsResponse.status} ${JSON.stringify(noDefaults)})`)
+
 await monitor.close()
 console.log('closed; smoke OK')

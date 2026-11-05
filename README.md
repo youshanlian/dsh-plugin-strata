@@ -12,10 +12,15 @@
    （冷启动发生在第一次请求之前，而不是请求期间）。
 4. **运行配置调参（调参）** —— 工具 `strata_params` + GUI 输入区旁的「调参」面板：
    编辑当前加载模型的 strata run-config（`sampling.temperature` / `top_p` / `top_k` /
-   `min_p`、思考预算、显存预留、别名表等 16 键），保存进 hop 维护的模型 profile。
+   `min_p`、思考预算、显存预留、别名表等 16 键），保存进 hop 维护的模型 profile，
+   下次启动生效。
+5. **聊天设置（聊天设置）** —— 同一面板/工具的第二块：strata 所有应用共享的采样与
+   思考档位默认值（`GET/POST /settings` 由 monitor 代理），保存**立即生效**且持久化，
+   无需重启。
 
-对推理**只读**：插件从不发 prompt、不消耗 token。写操作只有三类：`warm`（幂等预热）、
-run-config 调参（只改下次启动用的配置）、以及显式的「重启生效」（hop 卸载后带 `force`
+对推理**只读**：插件从不发 prompt、不消耗 token。写操作只有：`warm`（幂等预热）、
+run-config 调参（只改下次启动用的配置）、聊天设置（共享默认值，立即生效）、以及显式的
+「重启生效」（hop 卸载后带 `force`
 重新预热同一模型，同样不发 prompt）。真正的模型切换仍由 dsh 的模型选择器触发。
 
 ## 前置条件（一次性，系统侧）
@@ -87,10 +92,42 @@ EDITABLE 表一致（本包 `lib/params.js` 的 `PARAM_SPEC` 是同一份规范�
   不要手改 profile JSON —— hop 是这些文件的属主。
 - `restart` 之后 GUI 会轮询 `/events`，就绪后自动刷新面板。
 
+## 聊天设置（聊天设置, shared chat settings）
+
+这就是 strata **8081 聊天界面**里 Sampling 按钮打开的采样抽屉（思考档位 / 温度 /
+top_p / top_k / max tokens / seed / 显示思考 / 速度预测 / MCP / "Use for other apps
+too"），不在别的设置页。抽屉里勾上「Use for other apps too」保存时，把当前值 POST 到
+`/settings` 成为**所有应用共享的默认值**（持久化在
+`<配置基名>.shared-settings.json`）——dsh 的调参面板/工具管的就是这同一份共享默认值：
+
+- **GUI**：调参面板第二区「聊天设置（所有应用共享 · 立即生效）」，改行后点
+  「保存聊天设置」即时生效；留空 = 清除该项。
+- **工具**：`strata_params` —— `action: settings_get` 读取；`action: settings_set` 传
+  `set_json: '{"reasoning_effort": "medium", "temperature": 0.7}'`，`set_json: "null"` 清空全部。
+- **HTTP**（monitor :8756）：`GET /settings`、`POST /settings {"defaults": {...}}`
+  （`{"defaults": null}` 清空）。
+
+可调 8 键（`lib/params.js` 的 `SHARED_SPEC` 与 serve 的 `clean_shared_defaults` 一致）：
+`reasoning_effort`（思考档位 none/low/medium/high）、`temperature`、`top_p`、`top_k`、
+`seed`、`max_tokens`、`reasoning_budget_tokens`、`experimental_speed_projection`。
+
+语义要点：
+
+- **保存即生效、无需重启**：作用于「没带该参数」的请求；持久化，重启后仍在。
+- **请求优先**：请求明确带的参数覆盖共享默认——dsh 总是自带 `max_tokens`；模型条目带
+  `reasoningEfforts`（见 `cordis.patch.yml`），dsh 聊天设置里选了 Effort 就把对应
+  `reasoning_effort` 随请求发出，此时聊天设置里的思考档位只在未选时兜底。
+- **POST 是全量替换**：没带的键会被清除。GUI 总会重发全部现值（改哪行留空哪行），
+  直接调工具时先 `settings_get` 合并再提交。
+- 读写同样要求有加载中的引擎（这份设置由活着的 serve 持有），浏览器同样不能直连 hop 写。
+- 抽屉里的「显示思考」和「MCP 工具」两个开关是 8081 网页自己随每条请求带的客户端选项，
+  服务器上不存在存放它们的地方，所以本插件不代理；dsh 侧对应的是自己的思考展示与
+  工具/MCP 配置，Effort 行则已随 `reasoningEfforts` 出现在模型选择里。
+
 ## 测试
 
 ```
-node tools/smoke.js [--port 8757]     # 独立冒烟：监控 + hop 只读探测 + /params 路由与非法值拒绝，不动引擎
+node tools/smoke.js [--port 8757]     # 独立冒烟：监控 + hop 只读探测 + /params、/settings 路由与非法值拒绝，不动引擎
 dsh --profile web --dump-config       # 校验 bundle/补丁装配
 ```
 

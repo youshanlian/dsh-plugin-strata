@@ -13,7 +13,8 @@
       config:
         hopUrl: http://127.0.0.1:8080
         port: 8756  # 客户端芯片硬编码连接 :8756，勿改
-        host: 127.0.0.1  # 需从局域网设备访问 GUI/芯片时改为 0.0.0.0
+        host: 0.0.0.0  # 芯片走 window.location.hostname:8756；只绑 127.0.0.1 时，用 192.168.1.20:3080 打开 GUI 的浏览器连不上芯片。
+        # 不想把 :8756 暴露给局域网就改回 127.0.0.1，然后本机用 http://127.0.0.1:3080 打开 GUI。
         followJournal: true
 - id: llm-pi-ai
   config:
@@ -30,7 +31,25 @@
             name: 本地 IQ3_S (128K)
             contextWindow: 131072
             maxTokens: 16384
+            # dsh 聊天设置里的 Effort 行：选了就把对应值作为 reasoning_effort 随请求发出，
+            # 没选则用 strata「聊天设置」里的思考档位默认（见调参面板）。
+            reasoningEfforts:
+              off: none
+              minimal: low
+              low: low
+              medium: medium
+              high: high
+              xhigh: high
+              max: high
           - id: qwen3.8-flash-next-uncensored-iq3m
             name: 本地 IQ3_M 无审查 (128K)
             contextWindow: 131072
             maxTokens: 16384
+            reasoningEfforts:
+              off: none
+              minimal: low
+              low: low
+              medium: medium
+              high: high
+              xhigh: high
+              max: high
