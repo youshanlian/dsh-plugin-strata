@@ -1,7 +1,7 @@
 {
   "name": "dsh-plugin-strata",
-  "version": "1.0.0",
-  "description": "One plugin for the local strata stack: strata-hop :8080 model-switching router control, live switch/load monitoring (GUI chip + strata_status tool), warm-on-selection preloading, and the dsh provider config to route chats to it.",
+  "version": "1.1.0",
+  "description": "One plugin for the local strata stack: strata-hop :8080 model-switching router control, live switch/load monitoring (GUI chip + strata_status tool), warm-on-selection preloading, run-config tuning (调参: GUI panel + strata_params tool proxying hop /config, restart-to-apply without spending tokens), and the dsh provider config to route chats to it.",
   "type": "module",
   "main": "index.js",
   "exports": {
@@ -13,6 +13,7 @@
   "files": [
     "index.js",
     "lib/monitor.js",
+    "lib/params.js",
     "lib/client.js",
     "lib/client.bundle.js",
     "router/strata-hop.py",

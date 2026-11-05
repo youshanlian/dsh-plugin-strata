@@ -185,11 +185,42 @@ export function apply (ctx, config) {
     },
   }))
 
+  // Tool 1b (功能 4): tune the loaded model's strata run-config (temperature,
+  // top_p, reasoning budget, ...), the agent-side twin of the GUI 调参 panel.
+  // get/set/restart all go through hop's /config — writes land in the model's
+  // run-config file and take effect from the model's next start; restart
+  // (unload + warm force) applies them now without spending any prompt tokens.
+  ctx.tools.register(defineTool({
+    name: 'strata_params',
+    description:
+      "Tune the strata run-config (调参) of the currently loaded model — sampling defaults (temperature / top_p / top_k / min_p), reasoning_budget_tokens, vram_reserve_mib, mtp, idle_unload_s, engine_silence_s, aliases, etc. Actions: get = the current key/value view (read-only); set = save changes as JSON {\"<key>\": value, ...} with null to clear a key back to strata's default; restart = unload then warm the same model so saved values apply now (~25s engine reload, no inference tokens). Saved values are used from the model's NEXT start unless restarted. set works only while a model is loaded; never sends a prompt.",
+    parameters: {
+      action: { type: 'string', required: true, enum: ['get', 'set', 'restart'], description: 'what to do' },
+      set_json: { type: 'string', description: 'for set: JSON object of {key: value|null}, e.g. {"sampling.temperature": 0.6, "reasoning_budget_tokens": 4096, "aliases": null}; keys and ranges are validated against strata runconfig (see get for the key list)' },
+      model: { type: 'string', description: 'for restart: model id to restart (default: the loaded model)' },
+    },
+    output: {
+      schema: { type: 'json' },
+      render: (_args, value) => [{ type: 'text', text: JSON.stringify(value, null, 1) }],
+    },
+    async execute (input) {
+      await ready
+      const action = input?.action
+      if (action === 'get') return monitor.params.get()
+      if (action === 'restart') return monitor.params.restart(typeof input.model === 'string' && input.model !== '' ? input.model : undefined)
+      if (action !== 'set') return { ok: false, error: 'action must be get / set / restart' }
+      if (typeof input.set_json !== 'string' || input.set_json.trim() === '') return { ok: false, error: 'set needs set_json: a JSON object like {"sampling.temperature": 0.6}' }
+      let values
+      try { values = JSON.parse(input.set_json) } catch (error) { return { ok: false, error: `set_json is not valid JSON: ${String(error?.message ?? error)}` } }
+      return monitor.params.set(values)
+    },
+  }))
+
   // Tool 2 (功能 2): manage the strata-hop :8080 switching router itself.
   ctx.tools.register(defineTool({
     name: 'strata_hop',
     description:
-      'Manage the strata-hop model-switching router on port 8080. Actions: status = router state (loaded model, served ids, systemd unit state, hop config default/preload); models = catalog ids from hop config + ids dsh serves; warm = preload one model without any inference tokens (idempotent — the actual switch happens by selecting the model in dsh, this only warms it first so the engine boots before, not during, the first request); logs = recent router journal. status, models and logs never change what is loaded; warm only starts an engine.',
+      'Manage the strata-hop model-switching router on port 8080. Actions: status = router state (loaded model, served ids, systemd unit state, hop config default/preload); models = catalog ids from hop config + ids dsh serves; warm = preload one model without any inference tokens (idempotent; it sends force:true, so it DOES replace the currently loaded model — a switch costs ~25s cold start. GUI model selection does not force, it only warms when nothing else is loaded); logs = recent router journal. status, models and logs never change what is loaded; warm only starts an engine.',
     parameters: {
       action: { type: 'string', required: true, enum: ['status', 'models', 'warm', 'logs'], description: 'what to do' },
       model: { type: 'string', description: 'model id for warm (one of the catalog ids, verbatim)' },
@@ -204,7 +235,8 @@ export function apply (ctx, config) {
       const action = input?.action
       if (action === 'warm') {
         if (typeof input.model !== 'string' || input.model === '') return { ok: false, error: 'warm needs a model id (see action=models first)' }
-        return monitor.warm(input.model, config.warmProvider)
+        // 工具里的 warm 是明确的运维意图，带 force；GUI 的自动 warm 不带，所以不会挤掉正在用的引擎。
+        return monitor.warm(input.model, config.warmProvider, { force: true })
       }
       if (action === 'logs') {
         const n = Math.max(1, Math.min(200, Number(input?.lines) || 30))

@@ -44,5 +44,21 @@ console.log('events tail:', JSON.stringify(after.events?.slice(-3) ?? []))
 const http = await fetch(`http://127.0.0.1:${port}/events`).then((response) => response.json())
 console.log('http /events ok:', http.ok === true)
 
+// 调参路由：GET 只读；POST 只测会被拒绝的输入（校验失败/空改动都在写 hop 之前就返回，
+// 不产生任何副作用；/restart 会真重启引擎，冒烟里不触发）。
+const params = await fetch(`http://127.0.0.1:${port}/params`).then((response) => response.json())
+console.log('http /params:', params.ok === true ? `ok source=${params.source} loaded=${params.loaded} keys=${params.keys?.length}` : `not ok: ${params.error}`)
+const post = async (path, body) => fetch(`http://127.0.0.1:${port}${path}`, {
+  method: 'POST',
+  headers: { 'content-type': 'application/json' },
+  body: JSON.stringify(body),
+}).then((response) => response.json())
+const badValue = await post('/params', { set: { 'sampling.top_p': 3 } })
+console.log('POST /params top_p=3 rejected:', badValue.ok === false ? `yes (${badValue.error})` : 'NO — BUG')
+const emptySet = await post('/params', { set: {} })
+console.log('POST /params empty rejected:', emptySet.ok === false ? 'yes' : 'NO — BUG')
+const junkBody = await fetch(`http://127.0.0.1:${port}/params`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{oops' })
+console.log('POST /params malformed ->', junkBody.status === 400 ? '400 yes' : `NO — BUG (${junkBody.status})`)
+
 await monitor.close()
 console.log('closed; smoke OK')
