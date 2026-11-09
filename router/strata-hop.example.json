@@ -8,7 +8,7 @@
   "idle_seconds": 1800,
   "start_timeout": 420,
   "api_key_env": "STRATA_API_KEY",
-  "follow_sync_script": "/home/limanzhou/.local/share/strata-hop/strata-hop-sync.py",
+  "follow_sync_script": "/home/USER/.local/share/strata-hop/strata-hop-sync.py",
   "warm_requires_force": true,
   "aliases": {},
   "models": {

@@ -19,7 +19,7 @@ strata-hop 常驻但几乎不占资源：没有请求时你桌面上没有任何
 
 用法
 ----
-    strata-hop --config /home/limanzhou/.config/strata/strata-hop.json
+    strata-hop --config /home/USER/.config/strata/strata-hop.json
     strata-hop --config ... --print-route     # 只打印某模型会用什么命令，不拉起
 """
 

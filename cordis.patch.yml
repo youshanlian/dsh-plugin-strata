@@ -13,7 +13,7 @@
       config:
         hopUrl: http://127.0.0.1:8080
         port: 8756  # 客户端芯片硬编码连接 :8756，勿改
-        host: 0.0.0.0  # 芯片走 window.location.hostname:8756；只绑 127.0.0.1 时，用 192.168.1.20:3080 打开 GUI 的浏览器连不上芯片。
+        host: 0.0.0.0  # 芯片走 window.location.hostname:8756；只绑 127.0.0.1 时，用 http://192.168.x.y:3080 打开 GUI 的浏览器连不上芯片。
         # 不想把 :8756 暴露给局域网就改回 127.0.0.1，然后本机用 http://127.0.0.1:3080 打开 GUI。
         followJournal: true
 - id: llm-pi-ai
