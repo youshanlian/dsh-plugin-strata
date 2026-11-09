@@ -1,5 +1,29 @@
 # dsh-plugin-strata
 
+> **dsh × 本地 strata 的一体化控制面。**
+> 装上之后，你在 dsh 里选中一个 strata 模型，路由器就替你把它**预热**好——冷启动那 20-30 秒发生在选中的一刻，而不是第一次提问的时候。
+> GUI 顶部多一枚**状态芯片**：当前加载的是哪个模型、正在切换还是空闲、加载进度，实时可见（悬停看详情）。
+> 输入区旁多一个**「调参」面板**：直接编辑当前模型的 run-config（温度 / top_p / top_k / min_p / 思考预算 / 显存预留 / MTP / 别名表…16 键，保存后「重启生效」约 25 秒）和 strata 全应用共享的**聊天设置**（思考档位 / 采样默认值，保存即生效）。
+> 模型切换路由本身也有三个工具：`strata_hop`（status / models / warm / logs）、`strata_status`（实时状态）、`strata_params`（读改以上两类设置）——agent 也能自己动手调参。
+> 对推理**只读**：插件从不发 prompt、不消耗 token；它只管理你自己的路由器。
+>
+> **One plugin for dsh + a local strata stack.** Warm-on-selection model preloading, a live
+> load/switch status chip in the web GUI, a run-config + shared chat-settings tuning panel,
+> and agent tools (`strata_hop` / `strata_status` / `strata_params`) to control your own
+> strata-hop :8080 router. Read-only toward inference: it never sends a prompt and spends no tokens.
+>
+> ```sh
+> dsh plugin --profile web add github:youshanlian/dsh-plugin-strata   # 一键安装（需 dsh CLI）
+> ```
+>
+> 没装过 dsh CLI？跑一行引导脚本（执行上面那条命令 + 装后校验）：
+>
+> ```sh
+> bash <(curl -fsSL https://raw.githubusercontent.com/youshanlian/dsh-plugin-strata/main/install.sh)
+> ```
+>
+> 前置条件是系统侧已经跑着 strata + strata-hop（见下文[前置条件](#前置条件一次性系统侧)）；模型 id 需与你的 hop 配置一致（见[常见坑](#换到别的机器通用性注意事项)）。
+
 一个插件，四件事（合并自独立功能）：
 
 1. **strata 接入 dsh** —— bundle 自带 `cordis.patch.yml`，默认写入 provider `strata`
@@ -34,17 +58,31 @@ systemd:     ~/.config/systemd/user/strata-hop.service（本包 router/ 内有�
 
 ## 安装
 
-把本目录加进 profile 的 bundle 链（等价于插件页安装）：
+一条命令装进任意 profile（实测于 dsh 0.2.1-rc.2；bundle 会自动注册进 profile 的
+`dsh.profile.bundles`，插件自带的 `cordis.patch.yml` 默认启用插件行和 provider `strata`）：
+
+```sh
+dsh plugin --profile web add github:youshanlian/dsh-plugin-strata
+# 之后重启该 profile 的 dsh 即可看到状态芯片与「调参」面板
+```
+
+没有 dsh CLI 或想连 dsh 本体一起装，用仓库根目录的引导脚本：
+
+```sh
+bash <(curl -fsSL https://raw.githubusercontent.com/youshanlian/dsh-plugin-strata/main/install.sh)
+# 指定 profile： … install.sh --profile <name>；预览不执行：加 --dry-run
+```
+
+装好后若模型 id 与你的 hop 配置不同，在 profile 的补丁层覆盖 `llm-pi-ai` 的
+`providers.strata`（整条替换，非内置目录的条目要写全 `api` / `baseURL` / `models`）。
+
+开发模式（本机源码改动即时生效）才用 `file:` 链接：
 
 ```jsonc
 // ~/.dsh/profiles/<profile>/package.json
 "dependencies": { "dsh-plugin-strata": "file:/path/to/dsh-plugin-strata" },
 "dsh": { "profile": { "bundles": [ …, "dsh-plugin-strata" ] } }
 ```
-
-然后 `ln -s /path/to/dsh-plugin-strata ~/.dsh/profiles/<profile>/node_modules/`，
-重启 dsh。bundle 的 `cordis.patch.yml` 会默认启用插件行和 provider `strata`；
-若模型 id 与你的 hop 配置不同，请在 profile 的补丁层覆盖 `llm-pi-ai` 的 `providers.strata`。
 
 ## 配置（插件行 config）
 
