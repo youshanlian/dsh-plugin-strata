@@ -21,7 +21,8 @@
     "router/strata-hop.example.json",
     "LICENSE",
     "README.md",
-    "cordis.patch.yml"
+    "cordis.patch.yml",
+    "install.sh"
   ],
   "license": "MIT",
   "dsh": {
