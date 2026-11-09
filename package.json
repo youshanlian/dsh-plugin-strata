@@ -42,10 +42,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/OWNER_PLACEHOLDER/dsh-plugin-strata.git"
+    "url": "git+https://github.com/lmz/dsh-plugin-strata.git"
   },
-  "homepage": "https://github.com/OWNER_PLACEHOLDER/dsh-plugin-strata#readme",
+  "homepage": "https://github.com/lmz/dsh-plugin-strata#readme",
   "bugs": {
-    "url": "https://github.com/OWNER_PLACEHOLDER/dsh-plugin-strata/issues"
+    "url": "https://github.com/lmz/dsh-plugin-strata/issues"
   }
 }
