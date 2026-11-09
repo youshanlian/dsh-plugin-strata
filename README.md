@@ -169,9 +169,26 @@ node tools/smoke.js [--port 8757]     # 独立冒烟：监控 + hop 只读探测
 dsh --profile web --dump-config       # 校验 bundle/补丁装配
 ```
 
-## 发布到插件市场
+## 上架插件市场
 
-用官方生成器把本包（npm 发布后，或 git tag）编入市场索引：
+本插件走的是社区索引流程：在 [awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin)
+提一个 PR，新增 `data/plugins/youshanlian__dsh-plugin-strata.yml`：
+
+```yaml
+url: https://github.com/youshanlian/dsh-plugin-strata
+name: youshanlian/dsh-plugin-strata
+category: model
+tarball: https://github.com/youshanlian/dsh-plugin-strata/releases/latest/download/dsh-plugin-strata.tgz
+description.en: >-
+  …（一句以句号结尾的英文简介）
+```
+
+要点：`dsh.bundle.patch` 必须声明（否则索引器不给 `npm:`/`tarball:` 字段）；条目里不要手写
+`npm:`；Release 资产名不带版本号，`releases/latest/download` 永远指向最新；需要
+`dsh-plugin` topic 与 SPDX LICENSE，仓库创建需满 1 天。合并后即出现在 dsh Web 插件页，
+可直接搜索并点「安装」。
+
+自建私有市场（自定义插件市场 URL）才需要官方生成器：
 
 ```
 pnpm --filter @deepseek-ai/dsh-plugin-market-generator start \
