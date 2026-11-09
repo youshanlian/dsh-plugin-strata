@@ -2,3 +2,5 @@ node_modules/
 .npmcache/
 *.tgz
 __pycache__/
+*.bak
+*.bak.*

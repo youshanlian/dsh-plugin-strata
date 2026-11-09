@@ -19,7 +19,7 @@ strata-hop 常驻但几乎不占资源：没有请求时你桌面上没有任何
 
 用法
 ----
-    strata-hop --config /home/USER/.config/strata/strata-hop.json
+    strata-hop --config /home/limanzhou/.config/strata/strata-hop.json
     strata-hop --config ... --print-route     # 只打印某模型会用什么命令，不拉起
 """
 
@@ -63,6 +63,10 @@ def load_config(path: Path) -> dict:
     raw.setdefault("start_timeout", 300)
     raw.setdefault("api_key_env", "STRATA_API_KEY")
     raw.setdefault("aliases", {})
+    # 模型切换落地后叫醒它：把 DSH 的 agent-default-model 跟到 hop 刚加载的那个（null = 只靠 timer）
+    raw.setdefault("follow_sync_script", None)
+    # /warm 想挤掉已经加载好的模型时必须显式带 force:true：一次误切换 = 25 秒冷启动 + 55 GiB
+    raw.setdefault("warm_requires_force", True)
     # 开机预热：true 预热 default_model，或写一个模型 id 预热那个；false/不写则不预热
     raw.setdefault("preload_model", False)
     preload = raw["preload_model"]
@@ -176,7 +180,10 @@ class Pool:
         self.current: StrataUpstream | None = None
         self.current_lock = threading.Lock()
 
-    def resolve(self, requested: str | None) -> StrataUpstream:
+    def resolve(self, requested: str | None, prefer_current: bool = False) -> StrataUpstream:
+        # 没写 model 的请求优先落在**已经加载**的那个上：回退 default_model 会把驻留引擎踢掉
+        if requested is None and prefer_current and self.current is not None:
+            return self.current
         name = requested or self.cfg["default_model"]
         name = self.aliases.get(name, name)
         if name not in self.models:
@@ -185,15 +192,37 @@ class Pool:
 
     def ensure(self, requested: str | None) -> StrataUpstream:
         """返回已就绪的上游；必要时停掉旧的、启动新的（单模型共存，避免抢显存）。"""
-        want = self.resolve(requested)
+        want = self.resolve(requested, prefer_current=True)
+        switched = False
         with self.current_lock:
             if self.current is not want:
                 if self.current is not None:
                     self.current.stop()
                 want.start()
                 self.current = want
+                switched = True
             want.touch()
-            return want
+        if switched:
+            self.follow_sync(want.model_id)
+        return want
+
+    def follow_sync(self, model_id: str | None = None) -> None:
+        """切换一落地就叫醒 follow-sync，否则 DSH 默认模型最多要等一个 timer 周期才跟上。"""
+        script = self.cfg.get("follow_sync_script")
+        if not script:
+            return
+        # 触发痕迹写进 hop 自己的 journal；脚本输出走 DEVNULL，靠 60s 兜底 timer 补日志
+        print(f"[strata-hop] follow-sync triggered ({model_id})", flush=True)
+        try:
+            subprocess.Popen(
+                [sys.executable, script],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+        except OSError as exc:  # noqa: BLE001 — 跟不跟得上不影响路由本身
+            print(f"[strata-hop] follow-sync could not start: {exc}", flush=True)
 
     def current_or_default(self) -> StrataUpstream | None:
         with self.current_lock:
@@ -285,6 +314,15 @@ class Handler(BaseHTTPRequestHandler):
             if isinstance(value, str) and value:
                 return value
         return None
+
+    def _flag_from_body(self, body: bytes, key: str) -> bool:
+        if not body:
+            return False
+        try:
+            payload = json.loads(body)
+        except (ValueError, UnicodeDecodeError):
+            return False
+        return bool(isinstance(payload, dict) and payload.get(key))
 
     def _upstream_request(self, path: str, body: bytes, model: str | None) -> None:
         """把请求原样转发到当前上游，并把响应（含流式）逐块写回客户端。"""
@@ -384,12 +422,29 @@ class Handler(BaseHTTPRequestHandler):
         if path in ("/warm", "/preload", "/warmup"):
             # 点模型即预热：只拉起引擎，不产生任何推理 token（幂等）。
             requested = self._model_from_body(body)
+            force = self._flag_from_body(body, "force")
             try:
                 target = self.pool.resolve(requested)
             except KeyError:
                 self._error(404, f"unknown model {requested!r}", "invalid_request")
                 return
-            if self.pool.current is target:
+            loaded = self.pool.current_or_default()
+            if (loaded is not None and loaded is not target
+                    and not force and bool(self.cfg.get("warm_requires_force", True))):
+                # GUI 的选中（含新聊天恢复上次用过的选择）不该把正在用的引擎踢掉：要切就显式 force。
+                payload = json.dumps({
+                    "ok": True,
+                    "skipped": target.model_id,
+                    "loaded": loaded.model_id,
+                    "reason": 'warm would evict the loaded model; post {"force": true} to switch',
+                }, ensure_ascii=False).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+                return
+            if loaded is target:
                 payload = json.dumps({"ok": True, "already": target.model_id}, ensure_ascii=False).encode()
             else:
                 self.pool.preload(target.model_id)
